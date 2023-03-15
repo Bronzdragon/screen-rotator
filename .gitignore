@@ -1,2 +1,13 @@
 node_modules/
 target/
+
+.editorconfig
+.yarnrc.yml
+
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
