@@ -1,18 +1,28 @@
 'use strict'
 
-const { Gio, GLib /* GObject, St, Clutter, Meta, Gdk, Shell */ } = imports.gi
+const { Gio, GLib, St, Clutter, GObject /*, Meta, Gdk, Shell */ } = imports.gi
 
 type ExtensionMeta = {
-  metaData: Record<string, any>
-  uuid: string
-  type: number
-  dir: imports.gi.Gio.File
-  path: string
-  error: string
-  hasPrefs: boolean
-  hasUpdate: boolean
-  canChange: boolean
-  sessionModes: string[]
+  metadata: {
+    'uuid': string,
+    'name': string,
+    'description': string,
+    'shell-version': string,
+    'url': string,
+    'version': number,
+    'gettext-domain'?: string,
+    'settings-schema'?: typeof Gio.SettingsSchema,
+    'session-modes'?: ['user', 'unlock-dialog'?, 'gdm'?]
+  },
+  uuid: string,
+  type: number,
+  dir: typeof Gio.File,
+  path: string,
+  error: string,
+  hasPrefs: boolean,
+  hasUpdate: boolean,
+  canChange: boolean,
+  sessionModes: ['user', 'unlock-dialog'?, 'gdm'?],
 }
 
 /* extension.js
@@ -33,63 +43,104 @@ type ExtensionMeta = {
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-/* global imports log logError */
-/* exported init */
+const ExtensionUtils = imports.misc.extensionUtils;
+const _ = ExtensionUtils.gettext;
 
-// const ExtensionUtils = imports.misc.extensionUtils;
-const GETTEXT_DOMAIN = 'screen-rotate'
+const Main = imports.ui.main;
+const PanelMenu = imports.ui.panelMenu;
+const PopupMenu = imports.ui.popupMenu;
+
 
 log(createHeader('Creating proxy'))
 
-type crtc = [
-  number, // ID (u)
-  number, // winsys_id (x)
-  number, // x (i)
-  number, // y (i)
+type monitorMode = [
+  string, // id (s)
   number, // width (i)
   number, // height (i)
-  number, // current mode (i)
-  number, // current transform (u)
-  number[], // possible transforms (au)
-  Record<string, any>[] // properties (a{sv})
-]
-
-type output = [
-  number, // ID (u)
-  number, // wynsis_id (x)
-  number, // current_crtc (i)
-  number[], // possible crtcs (au)
-  string, // name (s)
-  number[], // modes (au)
-  number[], // clones (au)
+  number, // refresh rate (d)
+  number, // preferred scale (d)
+  number[], // supported scales (ad)
   {
-    'vendor'?: string,
-    'product'?: string,
-    'serial'?: string,
-    'display-name'?: string,
-    'backlight'?: number,
-    'primary'?: boolean,
-    'presentation'?: boolean,
+    'is-current': boolean,
+    'is-preferred': boolean,
+    'is-interlaced': boolean,
   }
 ]
-type mode = [
-  number, // ID (u)
-  number, // winsys_id (x)
-  number, // width (u)
-  number, // height (u)
-  number, // frequency (d)
-  number, // flags (u)
+type monitor = [
+  [
+    string, // connector name (s)
+    string, // vendor name (s)
+    string, // product name (s)
+    string, // product serial (s)
+  ],
+  monitorMode[], // available modes (a(siiddada{sv}))
+  {
+    'width-mm'?: number,
+    'height-mm'?: number,
+    'is-underscanning'?: boolean,
+    'max-screen-size'?: [number, number],
+    'is-builtin'?: boolean,
+    'display-name'?: string,
+    'privacy-screen-state'?: [boolean, boolean]
+  }
 ]
 
-type getResourcesArgs = [number, crtc[], output[], mode[], number, number]
+type getStateLogicalMonitor = [
+  number, // x (i)
+  number, // y (i)
+  number, // scale (d)
+  number, // transform (u)
+  boolean, // primary (b)
+  Array<[
+    string, // connector name (s)
+    string, // vendor name (s)
+    string, // product name (s)
+    string, // serial (s)
+  ]>, // monitors (a(sss))
+  {}, // properties (a{sv})
+]
+
+type getCurrentStateArgs = [
+  number,   // Serial (u)
+  monitor[], // Monitors (a((ssss)a(siiddada{sv})a{sv}))
+  getStateLogicalMonitor[], // Logical monitors (a(iiduba(ssss)a{sv}))
+  {
+    'layout-mode'?: number,
+    'supports-changing-layout-mode'?: boolean,
+    'global-scale-required'?: boolean,
+    'legacy-ui-scaling-factor'?: number,
+  },
+]
+
+type ApplyMonitorsConfigPhysicalMonitor = [
+  string, // connector (s)
+  string, // monitor mode ID (s)
+  {
+    'enable_underscanning'?: boolean
+  } // properties a{sv}
+]
+
+type ApplyMonitorsConfigLoglicalMonitor = [
+  number, // x (i)
+  number, // y (i)
+  number, // scale (d)
+  number, // transform (u)
+  boolean, // primary (b)
+  ApplyMonitorsConfigPhysicalMonitor[] // list of monitors (a(ssa{sv}))
+]
+
+type DisplayConfigProxyMixin = {
+  // GetResourcesRemote: (callback: (returnValue: getResourcesArgs, ErrorObj: Error, fdList: imports.gi.Gio.UnixFDList) => void) => void
+  // ApplyConfigurationRemote: (serial: number, persistent: boolean, crtcs: crctOutTupple[], outputs: outputOutTupple[], callback: (returnValue: [], ErrorObj: Error, fdList: imports.gi.Gio.UnixFDList) => void) => void
+  GetCurrentStateRemote(callback: (returnValue: getCurrentStateArgs, ErrorObj: Error, fdList: imports.gi.Gio.UnixFDList) => void): void
+  ApplyMonitorsConfigRemote(serial: number, method: number, logicalMontors: readonly ApplyMonitorsConfigLoglicalMonitor[], properties: ({ 'layout-mode'?: number }), callback?: (returnValue: never, ErrorObj: Error, fdList: imports.gi.Gio.UnixFDList) => void): void
+
+  connectSignal: (signalName: string, callback: (proxy: any, nameOnwer?: string, args?: string[]) => void) => number
+  // disconnectSignal: (signalHandle: number) => void
+}
 
 const DisplayConfigInterface = `<node><interface name='org.gnome.Mutter.DisplayConfig'>
-    <method name='ApplyConfiguration'>
-      <arg name='serial' direction='in' type='u' />
-      <arg name='persistent' direction='in' type='b' />
-      <arg name='crtcs' direction='in' type='a(uiiiuaua{sv})' />
-      <arg name='outputs' direction='in' type='a(ua{sv})' />
-    </method>
+    <!-- Methods -->
     <method name="GetResources">
       <arg name="serial" direction="out" type="u" />
       <arg name="crtcs" direction="out" type="a(uxiiiiiuaua{sv})" />
@@ -98,148 +149,248 @@ const DisplayConfigInterface = `<node><interface name='org.gnome.Mutter.DisplayC
       <arg name="max_screen_width" direction="out" type="i" />
       <arg name="max_screen_height" direction="out" type="i" />
     </method>
+    <method name="GetCurrentState">
+      <arg name="serial" direction="out" type="u" />
+      <arg name="monitors" direction="out" type="a((ssss)a(siiddada{sv})a{sv})" />
+      <arg name="logical_monitors" direction="out" type="a(iiduba(ssss)a{sv})" />
+      <arg name="properties" direction="out" type="a{sv}" />
+    </method>
+
+    <method name='ApplyConfiguration'>
+    <arg name='serial' direction='in' type='u' />
+    <arg name='persistent' direction='in' type='b' />
+    <arg name='crtcs' direction='in' type='a(uiiiuaua{sv})' />
+    <arg name='outputs' direction='in' type='a(ua{sv})' />
+    </method>
+    <method name="ApplyMonitorsConfig">
+      <arg name="serial" direction="in" type="u" />
+      <arg name="method" direction="in" type="u" />
+      <arg name="logical_monitors" direction="in" type="a(iiduba(ssa{sv}))" />
+      <arg name="properties" direction="in" type="a{sv}" />
+    </method>
+
+    <!-- Signals -->
     <signal name='MonitorsChanged'>
     </signal>
 </interface></node>`
 
-class CRTC {
-  id:number
-  winsysId: unknown = null
-  x:number; y:number
-  width:number; height:number
-  currentMode: number
-  currentTransform: number
-  possibleTransforms: number[]
-  properties: Record<string, any>
-
-  constructor (data: crtc) {
-    // We expect exactly 10 properties
-    if (!Array.isArray(data) || data.length !== 10) { throw new TypeError(`Cannot construct a CRTC from given input: ${JSON.stringify(data)}`) }
-
-    // Copy data out of the array
-    [this.id, this.winsysId, this.x, this.y, this.width, this.height, this.currentMode, this.currentTransform, this.possibleTransforms, this.properties] = data
-
-    if (!Number.isInteger(this.id)) { throw new TypeError(`Expected ID to be an integer, got ${this.id}`) }
-    if (!this.winsysId) { throw new TypeError(`Expected Winsys ID to have a value, got ${this.winsysId}`) }
-    if (!Number.isInteger(this.x)) { throw new TypeError(`Expected x to be an integer, got ${this.x}`) }
-    if (!Number.isInteger(this.y)) { throw new TypeError(`Expected y to be an integer, got ${this.y}`) }
-    if (!Number.isInteger(this.width)) { throw new TypeError(`Expected width to be an integer, got ${this.width}`) }
-    if (!Number.isInteger(this.height)) { throw new TypeError(`Expected height to be an integer, got ${this.height}`) }
-    if (!Number.isInteger(this.currentMode)) { throw new TypeError(`Expected current mode to be an integer, got ${this.currentMode}`) }
-    if (!Number.isInteger(this.currentTransform)) { throw new TypeError(`Expected current transform to be an integer, got ${this.currentTransform}`) }
-    if (!Array.isArray(this.possibleTransforms) || !this.possibleTransforms.every(v => Number.isInteger(v))) { throw new TypeError(`Expected possible transforms to be an integer, got ${this.x}`) }
-    if (!this.properties) { throw new TypeError(`Expected a properties object to exist. Instead, got ${this.properties}`) }
-  }
-
-  toString () {
-    return `ID: ${this.id}. Winsys ID: ${this.winsysId}
-    x: ${this.x}, y: ${this.y}
-    width: ${this.width}, height: ${this.height}
-    current mode: ${this.currentMode}
-    Transforms:
-      Current: ${this.currentTransform}
-      Possible: [ ${this.possibleTransforms.join(', ')} ]
-    Other properties: ${JSON.stringify(this.properties)}`
-  }
+enum RotateDirection {
+  clockwise = 1,
+  half = 2,
+  counterclockwise = 3,
+  full = 4,
 }
 
-class Output {
-  constructor(){
-    
-  }
-}
+class LogicalMonitor {
+  constructor(
+    public x: number,
+    public y: number,
+    public scale: number,
+    public transform: number,
+    public primary: boolean,
+    public connectors: string[],
+  ) { }
 
-class Extension {
-  private _mutterProxy = createAsyncProxy<{
-      GetResourcesRemote: (callback: (returnValue:getResourcesArgs, ErrorObj: Error, fdList: imports.gi.Gio.UnixFDList) => void) => void
-      connectSignal: (signalName: string, callback: (proxy: any, nameOnwer?: string, args?: string[] ) => void) => void
-    }>(
-      DisplayConfigInterface,
-      'org.gnome.Shell',
-      '/org/gnome/Mutter/DisplayConfig'
-    )
-  _lastSerial = -1
-  _crtcs: CRTC[] = []
-  _uuid: string
-
-  constructor (uuid: string) {
-    this._uuid = uuid
-    // ExtensionUtils.initTranslations(GETTEXT_DOMAIN)
+  rotate(amount = RotateDirection.clockwise) {
+    this.transform = (this.transform + amount) % 4
   }
 
-  enable () {
-    log(createHeader('extension enabled'))
-    this._mutterProxy.then(proxy => {
-      log('Proxy created. Getting resources...')
-      proxy.GetResourcesRemote((returnValue, ErrorObj) => {
-        if (ErrorObj) {
-          log(`Error fetching resources: ${ErrorObj}`)
-        }
-        this.onMonitorChange(returnValue)
-      })
+  static fromGetState([x, y, scale, tranform, primary, monitorsInUse]: getStateLogicalMonitor): LogicalMonitor {
+    const connectors = monitorsInUse.map(([connector]) => connector)
 
-      proxy.connectSignal('MonitorsChanged', (innerProxy: Awaited<typeof this._mutterProxy>) => {
-        innerProxy.GetResourcesRemote((returnValue, ErrorObj) => {
-          if (ErrorObj) {
-            log(`Error fetching resources: ${ErrorObj}`)
-          }
-          this.onMonitorChange(returnValue)
-        })
-      })
+    return new LogicalMonitor(x, y, scale, tranform, primary, connectors);
+  }
+
+  toConfigReady(availableMonitors: monitor[]): ApplyMonitorsConfigLoglicalMonitor {
+    const monitorList = this.connectors.map<ApplyMonitorsConfigPhysicalMonitor | null>(connector => {
+      const physicalMonitor = availableMonitors.find(monitor => monitor[0][0] === connector)
+      if (!physicalMonitor) return null
+
+      const currentMode = physicalMonitor[1].find(mode => mode[6]["is-current"])
+      if (!currentMode) return null
+
+      return [connector, currentMode[0], {}]
     })
 
-    // // Setup UI
-    // this._indicator = new Indicator()
-    // Main.panel.addToStatusArea(this._uuid, this._indicator, 0, 'right')
+    const ml = monitorList.filter((monitor): monitor is ApplyMonitorsConfigPhysicalMonitor => monitor !== null)
+
+    log(`Monitor List: ${JSON.stringify(monitorList)}`)
+
+    const config: ApplyMonitorsConfigLoglicalMonitor = [
+      this.x, this.y, this.scale, this.transform, this.primary, ml
+    ]
+
+    log(config)
+
+    return config
   }
 
-  disable () {
-    log(createHeader('extension disabled'))
-    // this._indicator.destroy()
-    // this._indicator = null
+  toString() {
+    return `x: ${this.x}, y: ${this.y}
+scale: ${this.scale}
+isPrimary: ${this.primary}, transform: ${this.transform}
+connectors: ${JSON.stringify(this.connectors)}`
+  }
+}
 
-    // this._icon.destroy()
-    // this._icon = null
+const Indicator = GObject.registerClass(class extends PanelMenu.Button {
+  constructor(public _rotateClicked: () => void) {
+    super()
   }
 
-  onMonitorChange (resources: getResourcesArgs) {
-    log(createHeader('Resources gotten.'))
+  _init() {
+    super._init(0.0, _('My Shiny Indicator'));
 
-    if (resources.length < 4) return
-    const [serial, crtcs, outputs, modes] = resources
+    this.add_child(new St.Icon({
+      icon_name: 'face-smile-symbolic',
+      style_class: 'system-status-icon',
+    }));
 
-    log(`serial: ${serial}`)
-    this._lastSerial = serial
+    let item = new PopupMenu.PopupMenuItem(_('Show Notification'));
+    item.connect('activate', () => {
+      this._rotateClicked();
+      Main.notify(_('Whatʼs up, folks?'));
+    });
 
-    log('crtcs:')
-    this._crtcs = crtcs.map(crtc => new CRTC(crtc))
-    log(this._crtcs)
+    this.menu.addMenuItem(item);
+  }
+});
 
-    log('outputs')
-    for (const output of outputs) {
-      const [id, winsysId, currentCrtc, ...rest] = output
+class Extension {
+  private _mutterProxy = createAsyncProxy<DisplayConfigProxyMixin>(
+    DisplayConfigInterface,
+    'org.gnome.Shell',
+    '/org/gnome/Mutter/DisplayConfig'
+  )
+  _uuid: string
+  _signalHandle?: number
+  _serial = 0
+  _logicalMonitors: LogicalMonitor[] = []
+  _physicalMontors: monitor[] = []
 
-      log(`-\tID: ${id}`)
-      log(`\twinsysId (${winsysId}) current CRTC(${currentCrtc}) other (${rest})`)
+  // UI:
+  panelButton: imports.gi.St.Bin
+  _indicator = new Indicator(() => {
+    log(createHeader('Turning Display'))
+
+    // Rotate monitor
+    const primaryMonitor = this._logicalMonitors.find(({ primary }) => primary)! // Can't be null, since every config must have a primary monitor
+    primaryMonitor.rotate(RotateDirection.clockwise);
+
+    // Saving config.
+    try {
+      const configReady = this._logicalMonitors.map(mon => mon.toConfigReady(this._physicalMontors))
+      this.setNewMonitorConfig(configReady).catch(logError)
+    } catch (error) {
+      if (!(error instanceof Error)) { throw error }
+      logError(error, 'error applying config');
+      Main.notify(_(`Couldn't rotate monitor. Error: ${error.message}`));
+    }
+  });
+
+
+  constructor(uuid: string) {
+    this._uuid = uuid
+
+
+    this.panelButton = new St.Bin({
+      style_class: "panel-button"
+    });
+    let panelButtonText = new St.Label({
+      text: "Hello world",
+      y_align: Clutter.ActorAlign.CENTER
+    });
+    this.panelButton.set_child(panelButtonText)
+  }
+
+  async enable() {
+    log(createHeader('extension enabled'))
+    // const notification = Gio.Notification.new('MyNotification')
+    // Main.notify(notification);
+
+    try {
+      const proxy = await this._mutterProxy
+
+      // Connect signal
+      this._signalHandle = proxy.connectSignal(
+        'MonitorsChanged',
+        // @ts-ignore: Unused proxy variable.
+        async (innerProxy: Awaited<typeof this._mutterProxy>) => {
+          try {
+            this.onMonitorChange()
+          } catch (error) {
+            logError(error as Error, "Monitor change signal happened, but cannot fetch config.")
+          }
+        })
+
+      // ... and get initial values
+      log('Proxy created. Getting resources...')
+      this.onMonitorChange()
+    } catch (error) {
+      logError(error as Error, "Monitor change signal happened, but cannot fetch config.")
     }
 
-    log('modes:')
-    for (const mode of modes) {
-      const [id, winsysId, width, height, frequency, flags] = mode
+    Main.panel.addToStatusArea(this._uuid, this._indicator)
+  }
 
-      log(`-\tID: ${id}`)
-      log(`\twinsys ID (${winsysId}) width(${width}) height(${height}) frequency(${frequency}) flags(${flags})`)
+  disable() {
+    log(createHeader('extension disabled'))
+    this._mutterProxy.then(proxy => {
+      if (this._signalHandle !== undefined) {
+        proxy.disconnectSignal(this._signalHandle)
+      }
+    })
+
+    // Destroy UI
+    if (this._indicator) { this._indicator.destroy() }
+  }
+
+  async onMonitorChange() {
+    log(createHeader('Monitor change detected'))
+    const proxy = await this._mutterProxy
+
+    proxy.GetCurrentStateRemote((result) => {
+      log(createHeader('Got current state!'))
+
+      const [serial, physicalMonitors, logicalMonitors] = result
+      this._serial = serial
+      this._physicalMontors = physicalMonitors
+      this._logicalMonitors = logicalMonitors.map(mon => LogicalMonitor.fromGetState(mon))
+
+      log('serial: ', serial)
+      log('logicalMonitors', logicalMonitors)
+
+      // this._logicalMonitors = logicalMonitors
+    });
+
+  }
+
+  async setNewMonitorConfig(logicalMonitors: ApplyMonitorsConfigLoglicalMonitor[]) {
+    log(createHeader('Setting new config'))
+
+    log(`monitors: ${JSON.stringify(logicalMonitors)}`)
+
+    try {
+      const proxy = await this._mutterProxy
+
+      const args = [this._serial, 1, logicalMonitors, {}] as const
+      log('args: ', JSON.stringify(args))
+      proxy.ApplyMonitorsConfigRemote(...args)
+    } catch (error) {
+      logError(error as Error)
     }
   }
 }
 
-// eslint-disable-next-line no-unused-vars
-function init (meta: ExtensionMeta) {
+function init(meta: ExtensionMeta) {
   log(createHeader('extension started'))
+
+  ExtensionUtils.initTranslations(meta.metadata["gettext-domain"]!)
+
   return new Extension(meta.uuid)
 }
 
-function createHeader (text = '', minLength = 30) {
+function createHeader(text = '', minLength = 30) {
   text = text.toLocaleUpperCase()
 
   // Min length of 4 beyond the word length to fit '= ' and ' =' before and after
@@ -253,10 +404,10 @@ function createHeader (text = '', minLength = 30) {
   return `\n${fullLine}\n${side}${centre}${side}\n${fullLine}`
 }
 
-function createAsyncProxy<ExtraStuff> (xml: string, name: string, object:string, { bus = Gio.DBus.session, cancellable = null, flags = Gio.DBusProxyFlags.NONE } = {}) {
+function createAsyncProxy<ExtraStuff>(xml: string, name: string, object: string, { bus = Gio.DBus.session, cancellable = null, flags = Gio.DBusProxyFlags.NONE } = {}): Promise<imports.gi.Gio.DBusProxy & ExtraStuff> {
   const proxyWrapper = Gio.DBusProxy.makeProxyWrapper<ExtraStuff>(xml)
 
-  return new Promise<imports.gi.Gio.DBusProxy & ExtraStuff>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     proxyWrapper(
       bus,
       name,
@@ -270,44 +421,3 @@ function createAsyncProxy<ExtraStuff> (xml: string, name: string, object:string,
     )
   })
 }
-
-function findLastInSequence<Type>(array: Type[] = [], delegate: (val: Type) => boolean = () => true, startIndex = 0) {
-  if (!delegate(array[startIndex])) return -1
-
-  for (let i = startIndex; i < array.length; i++) {
-    if (!delegate(array[i])) {
-      return i - 1
-    }
-  }
-
-  return array.length - 1
-}
-
-/*const { St, Clutter } = imports.gi
-// @ts-ignore
-const Main = imports.ui.main
-
-let panelButton: any;
-
-// @ts-ignore
-function init() {
-    panelButton = new St.Bin({
-        style_class : "panel-button"
-    });
-    let panelButtonText = new St.Label({
-        text: "Hello world",
-        y_align: Clutter.ActorAlign.CENTER
-    });
-    panelButton.set_child(panelButtonText)
-}
-
-// @ts-ignore
-function enable() {
-	log(`Hello log`);
-    Main.panel._rightBox.insert_child_at_index(panelButton, 0);
-}
-
-// @ts-ignore
-function disable() {
-    Main.panel._rightBox.remove_child(panelButton);
-}*/

@@ -1,21 +1,21 @@
 {
     "compilerOptions": {
-        "target": "es2015",
+        "target": "ES2015",
         "strict": true,
         "outDir": "./target",
         "forceConsistentCasingInFileNames": true,
         "downlevelIteration": true,
         "lib": [
-            "es2015"
+            "ES2015"
         ],
         "pretty": true,
         "sourceMap": false,
-        "declaration": false,
+        "declaration": true,
         "removeComments": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true,
         "exactOptionalPropertyTypes": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
     },
     "include": [
         "src/*.ts"
