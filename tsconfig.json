@@ -6,7 +6,7 @@
         "forceConsistentCasingInFileNames": true,
         "downlevelIteration": true,
         "lib": [
-            "ES2015"
+            "ES2017"
         ],
         "pretty": true,
         "sourceMap": false,
