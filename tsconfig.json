@@ -10,7 +10,7 @@
         ],
         "pretty": true,
         "sourceMap": false,
-        "declaration": true,
+        "declaration": false,
         "removeComments": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true,
