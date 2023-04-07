@@ -333,8 +333,8 @@ type DisplayConfigProxyMixin = {
 }
 
 enum RotateDirection {
-  clockwise = 1,
+  counterclockwise = 1,
   half = 2,
-  counterclockwise = 3,
+  clockwise = 3,
   full = 4,
 }
