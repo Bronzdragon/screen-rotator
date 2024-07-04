@@ -1,53 +1,42 @@
-# Gnome Extension Skeleton/Starter in TypeScript
+# Screen Rotator (Gnome Extension).
+This extension adds two quick rotate buttons to rotate the primary screen quickly. Useful on, e.g. tablet devices.
 
-This starter serves as a reference for a base new extension written in typescript
+Special thanks for the boilerplate starter code project [gnome-extension-typescript](https://github.com/benjilebon/gnome-extension-typescript)
 
-It contributes to the proposal of [GNOME Shell's JS/extensions transition to TypeScript](https://discourse.gnome.org/t/proposal-transition-gnome-shell-js-extensions-to-typescript-guide-for-extensions-today/4270)
-
-## Requirements
-
+## Build Requirements.
 - GNU Make
 - Yarn
 - Node (Preferably > 12.x.x)
 
-## Usage
+## Build/Debug Instructions.
 
-Outside of actual development of the extension (on which you can find a guide [here](https://gjs.guide/extensions/development/creating.html#a-working-extension)), every action is supposed to be used using the **Makefile** :
+This project uses a makefile as a build system.
+```sh
+make install # installs dependencies
+make build   # Runs TypeScript and builds the extension files
+make deploy  # deploys the files on the local system
+make release # creates a bundle (zip file), ready for release
+```
+After deployment, you must reload the gnome shell. You can do so by logging off and on again, or if you are using X, pressing `Alt`+`F2` to summon the command window, and then use the `r` command to reload the shell.
 
-Install the project/dependencies
-```
-make install
-```
-
-Build the project's JS files (in target folder)
-```
-make build
-```
-
-Deploy the target files to local user's GNOME Extensions folder (Tested in Ubuntu 22.04, be careful as this folder can change depending on your configuration)
-(**NOTE: the deploy action does not reload GNOME Shell for stability purpose, this action has to be done manually by the user to take changes in effect using Alt + F2 => `r` => Enter**)
-```
-make deploy
+If you are on Wayland, you can most easily test the extension by running an embedded shell.
+```sh
+dbus-run-session -- gnome-shell --nested --wayland
 ```
 
-Every of those actions (install, build, deploy) are run by default using only `make` without any recipe
-
-## Why TypeScript ?
-
-TypeScript is now a worldwide known and used language that aims to fix some of javascript's major problems, including lack of type-safety, security, code structure etc.
-
-It allows the code to be :
-
-- More readable
-
-- Easily maintainable 
-
-- More Stable
-
-- Easier to scale
-
-It also gives IDE support and tightier integration for an enhanced development experience
-
-Read more about TypeScript and its advantages [here](https://www.typescriptlang.org/)
-
+1. Find hitbox for primary screen
+2. Find centre.
+3. Rotate hitbox around centre (height becomes width, width becomes height)
+4. For every other display, create 'uncategorised list'
+5. If uncategorised list isn't empty, grab first display.
+    6. Find all connected displays, merge into 'display group'.
+    7. go to 5
+8. For each 'display group', find the vector that points to the rotated display for each individual display.
+9. Combine all vectors, normalize 
+10. Using a binary search, find the correct distance (Along the vector if no collision, and backwards if any display is intersecting.)
+11. Collect pairs of all the screens still intersecting.
+    12. For each pair, move them apart along the vector between their screen centres.
+    13. If any displays are not touching edges with any other displays, move them towards the rotated screen until it's edge is touching any screen again.
+    14. go to 11
+15. Done.
 

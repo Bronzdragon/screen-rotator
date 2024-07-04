@@ -1,14 +1,21 @@
 {
-  "name": "gnome-extension-typescript",
-  "version": "0.1.0",
-  "description": "A Gnome Extension Skeleton based on TypeScript for enhanced development",
+  "name": "screen-rotate",
+  "type": "module",
+  "version": "1.1.0",
+  "description": "Gnome extension which allows you to quickly rotate the screen.",
   "main": "index.js",
-  "author": "Benjamin LEBON",
-  "license": "MIT",
-  "dependencies": {
+  "author": "Walter Bormans",
+  "license": "GPL-3.0-only",
+  "devDependencies": {
     "@ci-types/gjs": "^1.0.12",
+    "@girs/gio-2.0": "^2.80.0-4.0.0-beta.5",
+    "@girs/gjs": "^4.0.0-beta.5",
+    "@girs/gnome-shell": "^46.0.0-beta8",
+    "@girs/st-14": "^14.0.0-4.0.0-beta.5",
+    "eslint": "^9.5.0",
+    "eslint-plugin-jsdoc": "^48.4.0",
     "json": "^11.0.0",
-    "typescript": "^4.6.4"
+    "typescript": "^5.5.2"
   },
   "types": "./gjs.d.ts"
 }

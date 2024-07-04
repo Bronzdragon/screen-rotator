@@ -4,6 +4,7 @@ release/
 
 .editorconfig
 .yarnrc.yml
+.vscode
 
 .pnp.*
 .yarn/*

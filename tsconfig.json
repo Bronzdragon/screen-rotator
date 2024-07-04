@@ -1,12 +1,14 @@
 {
     "compilerOptions": {
-        "target": "ES2015",
+        "target": "ES2022",
         "strict": true,
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
         "outDir": "./target",
         "forceConsistentCasingInFileNames": true,
         "downlevelIteration": true,
         "lib": [
-            "ES2017"
+            "ES2022"
         ],
         "pretty": true,
         "sourceMap": false,

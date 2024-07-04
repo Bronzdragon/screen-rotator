@@ -2,10 +2,10 @@
     "name" : "Screen Rotator",
     "description" : "Allows you to quickly rotate the screen.",
     "shell-version" : [
-        "43"
+        "45"
     ],
     "url" : "",
     "uuid" : "screen-rotate@bronzdragon.github.io",
-    "version" : 1.0,
+    "version" : "1.1.0",
     "gettext-domain": "screen-rotate"
 }
