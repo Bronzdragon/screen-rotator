@@ -1,7 +1,7 @@
 # Screen Rotator (Gnome Extension).
 This extension adds rotate left and rotate right buttons in the top panel to rotate the screen quickly. Useful for tablets and other devices without rotation sensors.
 
-[INSERT VIDEO HERE.]
+https://github.com/Bronzdragon/screen-rotator/assets/1936103/b006d9f4-01ea-4a6e-8c24-2f51afa6879b
 
 Primarily intended for devices with only one screen, but it supports multiple screens to handle drawing tablets, device development, virtual screens and other use cases. Auto Rotate on and off are both supported.
 
