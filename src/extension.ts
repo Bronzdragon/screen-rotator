@@ -355,6 +355,7 @@ type MonitorMode = [
     "is-interlaced": boolean;
   }
 ];
+
 type PhysicalMonitor = [
   [
     string, // connector name (s)
