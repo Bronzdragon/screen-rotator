@@ -4,7 +4,7 @@
     "shell-version" : [
         "45"
     ],
-    "url" : "",
+    "url" : "https://github.com/Bronzdragon/screen-rotator",
     "uuid" : "screen-rotator@bronzdragon.github.io",
     "version" : "1.1.0",
     "gettext-domain": "screen-rotator"
