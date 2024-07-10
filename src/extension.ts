@@ -2,7 +2,7 @@
 import type {} from "@girs/gio-2.0";
 import type {} from "@girs/st-14";
 
-import Gio from "gi://Gio?version=2.0";
+import Gio from "gi://Gio";
 import St from "gi://St";
 
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
@@ -29,25 +29,25 @@ const DisplayConfigInterface = `<node><interface name='org.gnome.Mutter.DisplayC
 </interface></node>`;
 
 export default class Extension {
-  #mutterProxy = createAsyncProxy<DisplayConfigProxyMixin>(
-    DisplayConfigInterface,
-    "org.gnome.Shell",
-    "/org/gnome/Mutter/DisplayConfig"
-  );
-
+  #mutterProxy: Promise<DisplayConfigProxyMixin> | null = null;
   #signalHandle?: number;
   #configSerial = 0;
   #logicalMonitors: LogicalMonitor[] = [];
   #physicalMonitors: PhysicalMonitor[] = [];
 
   // UI
-  leftButton?: St.Button;
-  rightButton?: St.Button;
+  leftButton: St.Button | null = null;
+  rightButton: St.Button | null = null;
 
   async enable() {
+    this.#mutterProxy = createAsyncProxy<DisplayConfigProxyMixin>(
+      DisplayConfigInterface,
+      "org.gnome.Shell",
+      "/org/gnome/Mutter/DisplayConfig"
+    );
+
     // Set up monitor info.
-    const proxy = await this.#mutterProxy;
-    this.#signalHandle = proxy.connectSignal("MonitorsChanged", async () => {
+    this.#signalHandle = (await this.#mutterProxy).connectSignal("MonitorsChanged", async () => {
       try {
         this.onMonitorChange();
       } catch (error) {
@@ -82,20 +82,29 @@ export default class Extension {
       // @ts-ignore
       Main.panel._rightBox.remove_child(this.leftButton);
     }
+    this.leftButton = null;
     if (this.rightButton) {
       // @ts-ignore
       Main.panel._rightBox.remove_child(this.rightButton);
     }
+    this.rightButton = null;
 
+    // Drop references
+    this.#logicalMonitors = [];
+    this.#physicalMonitors = [];
+
+    // disconnect proxy.
+    const proxy = await this.#mutterProxy;
     // Disconnect proxy
-    if (this.#signalHandle) {
-      const proxy = await this.#mutterProxy;
+    if (this.#signalHandle && proxy) {
       proxy.disconnectSignal(this.#signalHandle);
     }
+    this.#mutterProxy = null;
   }
 
   async onMonitorChange() {
     const proxy = await this.#mutterProxy;
+    if (!proxy) return;
 
     proxy.GetCurrentStateRemote((result) => {
       const [serial, physicalMonitors, logicalMonitors] = result;
@@ -115,6 +124,7 @@ export default class Extension {
 
     try {
       const proxy = await this.#mutterProxy;
+      if(!proxy) throw new TypeError("Mutter Proxy is null. Cannot apply monitor configuration.")
       proxy.ApplyMonitorsConfigRemote(
         this.#configSerial,
         method,
